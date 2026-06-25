@@ -30,7 +30,7 @@ export default function JobDetailPage() {
         .from('scrape_jobs')
         .select('*')
         .eq('id', params.id)
-        .single()
+        .maybeSingle()
 
       if (!jobData) {
         router.push('/jobs')

@@ -49,11 +49,11 @@ export default function ProjectDetailPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const { data: projectData } = await supabase
-      .from('projects')
-      .select('*')
-      .eq('id', params.id)
-      .single()
+      const { data: projectData } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', params.id)
+        .maybeSingle()
 
     if (!projectData) {
       router.push('/projects')

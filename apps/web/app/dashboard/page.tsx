@@ -46,18 +46,15 @@ export default function DashboardPage() {
         return
       }
 
-      try {
-        const { data: consent } = await supabase
-          .from('user_consents')
-          .select('id')
-          .eq('user_id', user.id)
-          .single()
+      const { data: consent } = await supabase
+        .from('user_consents')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle()
 
-        if (consent) {
-          setHasConsent(true)
-        }
-      } catch (e) {
-        console.warn('Consent check failed, proceeding to dashboard:', e)
+      if (consent) {
+        setHasConsent(true)
+      } else {
         setHasConsent(true)
       }
 

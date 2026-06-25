@@ -23,18 +23,13 @@ export default function OnboardingPage() {
         router.push('/login')
         return
       }
-      try {
-        const { data: consent } = await supabase
-          .from('user_consents')
-          .select('id')
-          .eq('user_id', user.id)
-          .single()
+      const { data: consent } = await supabase
+        .from('user_consents')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle()
 
-        if (consent) {
-          router.push('/dashboard')
-        }
-      } catch (e) {
-        console.warn('Consent check failed:', e)
+      if (consent) {
         router.push('/dashboard')
       }
     })

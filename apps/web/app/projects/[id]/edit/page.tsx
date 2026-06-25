@@ -41,7 +41,7 @@ export default function EditProjectPage() {
         .from('projects')
         .select('*')
         .eq('id', params.id)
-        .single()
+        .maybeSingle()
 
       if (data) {
         setProject(data)
