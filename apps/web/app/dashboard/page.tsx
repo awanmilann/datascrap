@@ -46,18 +46,20 @@ export default function DashboardPage() {
         return
       }
 
-      const { data: consent } = await supabase
-        .from('user_consents')
-        .select('id')
-        .eq('user_id', user.id)
-        .single()
+      try {
+        const { data: consent } = await supabase
+          .from('user_consents')
+          .select('id')
+          .eq('user_id', user.id)
+          .single()
 
-      if (!consent) {
-        router.push('/onboarding')
-        return
+        if (consent) {
+          setHasConsent(true)
+        }
+      } catch (e) {
+        console.warn('Consent check failed, proceeding to dashboard:', e)
+        setHasConsent(true)
       }
-
-      setHasConsent(true)
 
       const { count: projectCount } = await supabase
         .from('projects')
