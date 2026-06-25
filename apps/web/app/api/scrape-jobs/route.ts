@@ -1,5 +1,95 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+
+async function processJobInline(jobId: string, projectId: string, userId: string, urls: string[]) {
+  const adminSupabase = createAdminClient()
+
+  await adminSupabase
+    .from('scrape_jobs')
+    .update({ status: 'running', started_at: new Date().toISOString() })
+    .eq('id', jobId)
+
+  let totalItems = 0
+  let processedUrls = 0
+
+  for (const url of urls) {
+    try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 15000)
+
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'DataHarvest/1.0 (Research Bot)',
+          'Accept': 'text/html,application/xhtml+xml',
+        },
+      })
+      clearTimeout(timeout)
+
+      if (!response.ok) {
+        await adminSupabase.from('error_logs').insert({
+          scrape_job_id: jobId,
+          project_id: projectId,
+          url,
+          error_code: `HTTP_${response.status}`,
+          error_message: `HTTP ${response.status}`,
+        })
+        processedUrls++
+        continue
+      }
+
+      const html = await response.text()
+      const title = html.match(/<title>([^<]*)<\/title>/i)?.[1] || ''
+      const ogTitle = html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]*)"/i)?.[1]
+      const desc = html.match(/<meta[^>]*name="description"[^>]*content="([^"]*)"/i)?.[1]
+      const ogDesc = html.match(/<meta[^>]*property="og:description"[^>]*content="([^"]*)"/i)?.[1]
+      const ogImage = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]*)"/i)?.[1]
+      const ogPrice = html.match(/(?:Rp|IDR|Rp\.?)\s*([\d,]+(?:\.\d{3})*)/i)?.[1]
+
+      await adminSupabase.from('scraped_items').insert({
+        project_id: projectId,
+        scrape_job_id: jobId,
+        title: ogTitle || title || new URL(url).hostname,
+        price: ogPrice ? `Rp ${ogPrice}` : null,
+        description: ogDesc || desc || null,
+        image_url: ogImage || null,
+        source_url: url,
+        scraped_at: new Date().toISOString(),
+        raw_data: { url, length: html.length },
+      })
+
+      totalItems++
+    } catch (err: any) {
+      await adminSupabase.from('error_logs').insert({
+        scrape_job_id: jobId,
+        project_id: projectId,
+        url,
+        error_code: 'FETCH_ERROR',
+        error_message: err?.message || 'Failed to fetch',
+      })
+    }
+    processedUrls++
+    await new Promise(resolve => setTimeout(resolve, 3000))
+  }
+
+  await adminSupabase
+    .from('scrape_jobs')
+    .update({
+      status: 'completed',
+      processed_urls: processedUrls,
+      total_items: totalItems,
+      completed_at: new Date().toISOString(),
+    })
+    .eq('id', jobId)
+
+  await adminSupabase.from('audit_logs').insert({
+    user_id: userId,
+    action: 'scrape_job.completed',
+    entity_type: 'scrape_job',
+    entity_id: jobId,
+  })
+}
 
 export async function POST(request: Request) {
   const supabase = createClient()
@@ -83,6 +173,8 @@ export async function POST(request: Request) {
     } catch (e) {
       console.error('Failed to notify scraper worker:', e)
     }
+  } else {
+    processJobInline(job.id, body.project_id, user.id, urls.map(u => u.url))
   }
 
   return NextResponse.json(job, { status: 201 })
