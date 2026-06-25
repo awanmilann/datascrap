@@ -122,6 +122,7 @@ type ToasterToast = {
   description?: React.ReactNode
   action?: ToastActionElement
   variant?: 'default' | 'destructive'
+  open?: boolean
 }
 
 const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
